@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ulikunitz/xz"
 )
@@ -45,7 +46,6 @@ func findMatchingFiles(directory string) ([]string, error) {
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -227,8 +227,10 @@ func expandTarFile(inputFile string, outputDir string) error {
 }
 
 func main() {
+	log.SetFlags(log.Lshortfile)
+
 	// Specify the directory to search
-	searchDirectory := "/tmp/logs"
+	searchDirectory := "data/logs"
 
 	// Call the function to find matching files
 	matchingFiles, err := findMatchingFiles(searchDirectory)
@@ -273,11 +275,20 @@ func main() {
 	// Process the list of unmarshaled data as needed
 	for _, manifest := range manifests {
 		// Check if the directory exists
-		outputDir := filepath.Join("/tmp/logs/expanded", strconv.FormatInt(manifest.TimeEpoch, 10))
+		outputDir := filepath.Join("data/logs/expanded", strconv.FormatInt(manifest.TimeEpoch, 10))
+		outputDir, _ = filepath.Abs(outputDir)
+		tarPath := filepath.Join(outputDir, manifest.FileName)
+
+		log.Printf("checking existance of directory: %s", outputDir)
 		if _, err := os.Stat(outputDir); os.IsNotExist(err) {
 			// Directory does not exist, expand the file based on file extension
-			fmt.Printf("Expanding file for TimeEpoch %d...\n", manifest.TimeEpoch)
-			inputFile := fmt.Sprintf("/tmp/logs/%s", manifest.FileName)
+
+			e := time.Unix(manifest.TimeEpoch, 0)
+			now := time.Now()
+			duration := now.Sub(e)
+			log.Printf("%s was created %s ago\n", tarPath, duration.Truncate(time.Second))
+
+			inputFile := fmt.Sprintf("data/logs/%s", manifest.FileName)
 
 			// Determine the file extension and expand accordingly
 			fileExtension := strings.ToLower(filepath.Ext(inputFile))

@@ -288,7 +288,7 @@ func main() {
 				} else {
 					log.Printf("XZ File expanded successfully: %s -> %s\n", inputFile, outputDir)
 				}
-			case ".tar.gz":
+			case ".gz":
 				if err := expandTarGzFile(inputFile, outputDir); err != nil {
 					log.Printf("Error expanding TAR GZ file %s: %v\n", inputFile, err)
 				} else {

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/ulikunitz/xz"
+
+	"github.com/taylormonacelli/tidehead"
 )
 
 // Define a struct that matches the JSON data structure
@@ -53,8 +55,8 @@ func findMatchingFiles(directory string) ([]string, error) {
 	return matchingFiles, nil
 }
 
-func expandXZFile(inputFile string, outputDir string) error {
-	log.Printf("Expanding XZ file %s to %s\n", inputFile, outputDir)
+func expandXZFile(logger *slog.Logger, inputFile string, outputDir string) error {
+	logger.Debug("Expanding XZ file %s to %s", inputFile, outputDir)
 
 	// Create the output directory if it doesn't exist
 	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
@@ -99,18 +101,18 @@ func expandXZFile(inputFile string, outputDir string) error {
 	if strings.HasSuffix(outputFile, ".tar") {
 		// The expanded file is a TAR file, so we should expand it
 		tarOutputDir := outputDir // Use the same output directory
-		if err := expandTarFile(outputFile, tarOutputDir); err != nil {
-			log.Printf("Error expanding TAR file %s: %v\n", outputFile, err)
+		if err := expandTarFile(logger, outputFile, tarOutputDir); err != nil {
+			logger.Debug(fmt.Sprintf("Error expanding TAR file %s: %v", outputFile, err))
 		} else {
-			log.Printf("TAR File expanded successfully: %s -> %s\n", outputFile, tarOutputDir)
+			logger.Debug(fmt.Sprintf("TAR File expanded successfully: %s -> %s", outputFile, tarOutputDir))
 		}
 	}
 
 	return nil
 }
 
-func expandTarGzFile(inputFile string, outputDir string) error {
-	log.Printf("Expanding TAR GZ file %s to %s\n", inputFile, outputDir)
+func expandTarGzFile(logger *slog.Logger, inputFile string, outputDir string) error {
+	logger.Debug(fmt.Sprintf("Expanding TAR GZ file %s to %s", inputFile, outputDir))
 
 	// Create the output directory if it doesn't exist
 	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
@@ -171,8 +173,8 @@ func expandTarGzFile(inputFile string, outputDir string) error {
 	return nil
 }
 
-func expandTarFile(inputFile string, outputDir string) error {
-	log.Printf("Expanding TAR file %s to %s\n", inputFile, outputDir)
+func expandTarFile(logger *slog.Logger, inputFile string, outputDir string) error {
+	logger.Debug(fmt.Sprintf("Expanding TAR file %s to %s", inputFile, outputDir))
 
 	// Create the output directory if it doesn't exist
 	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
@@ -226,8 +228,40 @@ func expandTarFile(inputFile string, outputDir string) error {
 	return nil
 }
 
+func epochToDuration(i int64) string {
+	e := time.Unix(i, 0)
+	now := time.Now()
+	duration := now.Sub(e)
+
+	friendly := tidehead.FormatDuration(duration)
+	return friendly
+}
+
 func main() {
-	log.SetFlags(log.Lshortfile)
+	handlerIngoreDebug := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})
+	loggerIgnoreDebug := slog.New(handlerIngoreDebug)
+	slog.SetDefault(loggerIgnoreDebug)
+	slog.Info("Info message")
+
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		AddSource: true,
+		Level:     slog.LevelDebug,
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.SourceKey {
+				source, _ := a.Value.Any().(*slog.Source)
+				if source != nil {
+					source.File = filepath.Base(source.File)
+				}
+			}
+			// Remove time.
+			if a.Key == slog.TimeKey && len(groups) == 0 {
+				return slog.Attr{}
+			}
+			return a
+		},
+	})
+
+	logger := slog.New(handler)
 
 	// Specify the directory to search
 	searchDirectory := "data/logs"
@@ -235,7 +269,7 @@ func main() {
 	// Call the function to find matching files
 	matchingFiles, err := findMatchingFiles(searchDirectory)
 	if err != nil {
-		log.Fatalf("Error finding matching files: %v\n", err)
+		logger.Debug(fmt.Sprintf("Error finding matching files: %v", err))
 		return
 	}
 
@@ -247,7 +281,7 @@ func main() {
 		// Open the file for reading
 		file, err := os.Open(filePath)
 		if err != nil {
-			log.Printf("Error opening file %s: %v\n", filePath, err)
+			logger.Debug(fmt.Sprintf("Error opening file %s: %v", filePath, err))
 			continue
 		}
 		defer file.Close()
@@ -258,13 +292,13 @@ func main() {
 		// Read the file contents
 		data, err := io.ReadAll(file)
 		if err != nil {
-			log.Printf("Error reading file %s: %v\n", filePath, err)
+			logger.Debug(fmt.Sprintf("Error reading file %s: %v", filePath, err))
 			continue
 		}
 
 		// Unmarshal the JSON data into the struct
 		if err := json.Unmarshal(data, &manifest); err != nil {
-			log.Printf("Error unmarshaling JSON from file %s: %v\n", filePath, err)
+			logger.Debug(fmt.Sprintf("Error unmarshaling JSON from file %s: %v", filePath, err))
 			continue
 		}
 
@@ -279,14 +313,13 @@ func main() {
 		outputDir, _ = filepath.Abs(outputDir)
 		tarPath := filepath.Join(outputDir, manifest.FileName)
 
-		log.Printf("checking existance of directory: %s", outputDir)
+		d := epochToDuration(manifest.TimeEpoch)
+		logger.Debug(fmt.Sprintf("%s: checking existance of directory: %s", d, outputDir))
 		if _, err := os.Stat(outputDir); os.IsNotExist(err) {
 			// Directory does not exist, expand the file based on file extension
 
-			e := time.Unix(manifest.TimeEpoch, 0)
-			now := time.Now()
-			duration := now.Sub(e)
-			log.Printf("%s was created %s ago\n", tarPath, duration.Truncate(time.Second))
+			d := epochToDuration(manifest.TimeEpoch)
+			logger.Debug(fmt.Sprintf("%s age %s ago", tarPath, d))
 
 			inputFile := fmt.Sprintf("data/logs/%s", manifest.FileName)
 
@@ -294,25 +327,25 @@ func main() {
 			fileExtension := strings.ToLower(filepath.Ext(inputFile))
 			switch fileExtension {
 			case ".xz":
-				if err := expandXZFile(inputFile, outputDir); err != nil {
-					log.Printf("Error expanding XZ file %s: %v\n", inputFile, err)
+				if err := expandXZFile(logger, inputFile, outputDir); err != nil {
+					logger.Debug(fmt.Sprintf("Error expanding XZ file %s: %v", inputFile, err))
 				} else {
-					log.Printf("XZ File expanded successfully: %s -> %s\n", inputFile, outputDir)
+					logger.Debug(fmt.Sprintf("XZ File expanded successfully: %s -> %s", inputFile, outputDir))
 				}
 			case ".gz":
-				if err := expandTarGzFile(inputFile, outputDir); err != nil {
-					log.Printf("Error expanding TAR GZ file %s: %v\n", inputFile, err)
+				if err := expandTarGzFile(logger, inputFile, outputDir); err != nil {
+					logger.Debug(fmt.Sprintf("Error expanding TAR GZ file %s: %v", inputFile, err))
 				} else {
-					log.Printf("TAR GZ File expanded successfully: %s -> %s\n", inputFile, outputDir)
+					logger.Debug(fmt.Sprintf("TAR GZ File expanded successfully: %s -> %s", inputFile, outputDir))
 				}
 			case ".tar":
-				if err := expandTarFile(inputFile, outputDir); err != nil {
-					log.Printf("Error expanding TAR file %s: %v\n", inputFile, err)
+				if err := expandTarFile(logger, inputFile, outputDir); err != nil {
+					logger.Debug(fmt.Sprintf("Error expanding TAR file %s: %v", inputFile, err))
 				} else {
-					log.Printf("TAR File expanded successfully: %s -> %s\n", inputFile, outputDir)
+					logger.Debug(fmt.Sprintf("TAR File expanded successfully: %s -> %s", inputFile, outputDir))
 				}
 			default:
-				log.Printf("Unsupported file format for %s\n", inputFile)
+				logger.Debug(fmt.Sprintf("Unsupported file format for %s", inputFile))
 			}
 		}
 	}

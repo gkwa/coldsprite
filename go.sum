@@ -6,5 +6,7 @@ github.com/taylormonacelli/tidehead v0.0.1 h1:fz8PJykzF52yZFsvduxKlMNu7rvEL5r99q
 github.com/taylormonacelli/tidehead v0.0.1/go.mod h1:l75aethzcAV+O4vC/pWnwBmvBdwMaWQyEf1tk/boWDM=
 github.com/taylormonacelli/tidehead v0.0.2 h1:NCyDGdWYSLyUVfH0/qjAPq/tSPJZieVHdtiufouv0NA=
 github.com/taylormonacelli/tidehead v0.0.2/go.mod h1:l75aethzcAV+O4vC/pWnwBmvBdwMaWQyEf1tk/boWDM=
+github.com/taylormonacelli/tidehead v0.0.7 h1:CTgUsGpR//23gRla9lKPxc/9DUH7EKn7aAOoi84oDwc=
+github.com/taylormonacelli/tidehead v0.0.7/go.mod h1:l75aethzcAV+O4vC/pWnwBmvBdwMaWQyEf1tk/boWDM=
 github.com/ulikunitz/xz v0.5.11 h1:kpFauv27b6ynzBNT/Xy+1k+fK4WswhN/6PN5WhFAGw8=
 github.com/ulikunitz/xz v0.5.11/go.mod h1:nbz6k7qbPmH4IRqmfOplQw/tblSgqTqBwxkY0oWt/14=
